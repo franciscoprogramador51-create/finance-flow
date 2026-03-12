@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>FinanceFlow | Mensal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #0f172a; color: white; font-family: 'Inter', sans-serif; overflow-x: hidden; }
+        .glass { background: rgba(30, 41, 59, 0.8); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
+        input, select { background: #1e293b !important; color: white !important; border: 1px solid #334155 !important; padding: 12px; border-radius: 10px; width: 100%; }
+        .modal-off { display: none !important; }
+    </style>
+</head>
+<body class="p-4 md:p-10">
+
+    <!-- TELA DE ENTRADA (LOGIN) -->
+    <div id="login-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950">
+        <div class="glass p-10 rounded-3xl w-full max-w-sm text-center shadow-2xl border-indigo-500/30 border">
+            <div class="w-20 h-20 bg-indigo-600 rounded-full mx-auto mb-6 flex items-center justify-center text-2xl font-black shadow-lg shadow-indigo-500/50">FF</div>
+            <h2 class="text-2xl font-bold mb-2">Bem-vindo</h2>
+            <p class="text-slate-400 mb-8 text-sm">Digite seu nome e aperte Enter</p>
+            
+            <!-- Input com evento de tecla Enter -->
+            <input type="text" id="user-name" placeholder="Nome do Usuário" 
+                   class="mb-4 text-center text-lg focus:border-indigo-500 outline-none transition-all"
+                   onkeypress="if(event.key === 'Enter') liberarSistema()">
+            
+            <button onclick="liberarSistema()" class="w-full bg-indigo-600 hover:bg-indigo-500 py-4 rounded-xl font-bold transition-all shadow-lg shadow-indigo-500/20">
+                ACESSAR PAINEL
+            </button>
+        </div>
+    </div>
+
+    <!-- PAINEL PRINCIPAL -->
+    <div class="max-w-5xl mx-auto">
+        <header class="flex flex-col md:flex-row justify-between items-center mb-10 gap-4">
+            <div>
+                <h1 id="user-display" class="text-3xl font-black text-white italic">FinanceFlow</h1>
+                <p id="date-display" class="text-indigo-400 font-bold uppercase text-xs tracking-widest"></p>
+            </div>
+            <div class="flex items-center gap-3">
+                <label class="text-xs font-bold text-slate-500">MÊS DE REFERÊNCIA:</label>
+                <input type="month" id="filter-month" onchange="atualizarTela()" class="!w-40 !p-2 !text-sm">
+                <button onclick="sair()" class="text-rose-500 text-xs font-bold hover:bg-rose-500/10 p-2 rounded-lg transition">SAIR</button>
+            </div>
+        </header>
+
+        <!-- CARDS DE RESUMO -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+            <div class="glass p-6 rounded-2xl border-l-4 border-emerald-500 shadow-xl">
+                <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Entradas do Mês</span>
+                <div id="resumo-entrada" class="text-3xl font-black text-emerald-400">R$ 0,00</div>
+            </div>
+            <div class="glass p-6 rounded-2xl border-l-4 border-rose-500 shadow-xl">
+                <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Saídas do Mês</span>
+                <div id="resumo-saida" class="text-3xl font-black text-rose-400">R$ 0,00</div>
+            </div>
+            <div class="glass p-6 rounded-2xl border-l-4 border-indigo-500 shadow-xl">
+                <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Saldo do Mês</span>
+                <div id="resumo-saldo" class="text-3xl font-black text-white">R$ 0,00</div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- FORMULÁRIO -->
+            <div class="glass p-8 rounded-3xl border border-white/5">
+                <h3 class="font-bold mb-6 flex items-center gap-2 text-lg"><span class="text-indigo-500">●</span> Novo Lançamento</h3>
+                <div class="space-y-4">
+                    <input type="text" id="desc" placeholder="Descrição (ex: Aluguel, Salário)">
+                    <div class="flex gap-2">
+                        <input type="number" id="valor" placeholder="Valor R$" step="0.01">
+                        <select id="tipo">
+                            <option value="entrada">Receita (+)</option>
+                            <option value="saida">Despesa (-)</option>
+                        </select>
+                    </div>
+                    <!-- Data do lançamento (afeta em qual mês ele aparece) -->
+                    <input type="date" id="data-lancamento">
+                    <button onclick="adicionarDados()" class="w-full bg-indigo-600 hover:bg-indigo-500 py-4 rounded-xl font-bold shadow-lg shadow-indigo-600/30 transition-all active:scale-95">
+                        SALVAR NO HISTÓRICO
+                    </button>
+                </div>
+            </div>
+
+            <!-- LISTA FILTRADA -->
+            <div class="glass p-8 rounded-3xl border border-white/5 flex flex-col h-[450px]">
+                <h3 class="font-bold mb-6 flex items-center justify-between">
+                    <span>Histórico Mensal</span>
+                    <span id="count-items" class="bg-indigo-600 text-[10px] px-2 py-1 rounded-full">0</span>
+                </h3>
+                <div id="lista-transacoes" class="space-y-3 overflow-y-auto pr-2 flex-1 scrollbar-thin scrollbar-thumb-indigo-600">
+                    <!-- Itens via JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let dados = JSON.parse(localStorage.getItem('ff_data')) || [];
+
+        // Define o mês atual como padrão nos campos ao abrir
+        window.onload = () => {
+            const agora = new Date();
+            const mesAno = agora.toISOString().slice(0, 7); // Ex: 2023-10
+            const hoje = agora.toISOString().slice(0, 10); // Ex: 2023-10-25
+            
+            document.getElementById('filter-month').value = mesAno;
+            document.getElementById('data-lancamento').value = hoje;
+            
+            const user = localStorage.getItem('ff_user');
+            if (user) {
+                document.getElementById('login-modal').classList.add('modal-off');
+                document.getElementById('user-display').innerText = `Olá, ${user}!`;
+                atualizarTela();
+            }
+        };
+
+        function liberarSistema() {
+            const nome = document.getElementById('user-name').value;
+            if (nome.trim()) {
+                localStorage.setItem('ff_user', nome);
+                document.getElementById('login-modal').classList.add('modal-off');
+                document.getElementById('user-display').innerText = `Olá, ${nome}!`;
+                atualizarTela();
+            }
+        }
+
+        function sair() {
+            localStorage.removeItem('ff_user');
+            location.reload();
+        }
+
+        function adicionarDados() {
+            const desc = document.getElementById('desc').value;
+            const valor = parseFloat(document.getElementById('valor').value);
+            const tipo = document.getElementById('tipo').value;
+            const data = document.getElementById('data-lancamento').value;
+
+            if (!desc || isNaN(valor) || !data) {
+                alert("Preencha todos os campos corretamente!");
+                return;
+            }
+
+            // Salva com a data específica escolhida
+            dados.push({ id: Date.now(), desc, valor, tipo, data });
+            localStorage.setItem('ff_data', JSON.stringify(dados));
+            
+            // Limpa apenas os campos de texto
+            document.getElementById('desc').value = '';
+            document.getElementById('valor').value = '';
+            atualizarTela();
+        }
+
+        function atualizarTela() {
+            const mesSelecionado = document.getElementById('filter-month').value;
+            
+            // Filtra os dados apenas para o mês escolhido no topo
+            const dadosFiltrados = dados.filter(d => d.data.startsWith(mesSelecionado));
+
+            const entradas = dadosFiltrados.filter(d => d.tipo === 'entrada').reduce((acc, d) => acc + d.valor, 0);
+            const saidas = dadosFiltrados.filter(d => d.tipo === 'saida').reduce((acc, d) => acc + d.valor, 0);
+            const saldo = entradas - saidas;
+
+            // Atualiza Cards
+            document.getElementById('resumo-entrada').innerText = `R$ ${entradas.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
+            document.getElementById('resumo-saida').innerText = `R$ ${saidas.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
+            document.getElementById('resumo-saldo').innerText = `R$ ${saldo.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
+            document.getElementById('count-items').innerText = dadosFiltrados.length;
+
+            // Atualiza Lista
+            const lista = document.getElementById('lista-transacoes');
+            lista.innerHTML = dadosFiltrados.sort((a,b) => new Date(b.data) - new Date(a.data)).map(d => `
+                <div class="flex justify-between items-center p-4 bg-slate-800/40 rounded-2xl border border-white/5 hover:border-indigo-500/30 transition-all group">
+                    <div>
+                        <div class="text-sm font-bold text-slate-200">${d.desc}</div>
+                        <div class="text-[10px] text-slate-500 font-mono italic">${d.data.split('-').reverse().join('/')}</div>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <span class="font-black text-sm ${d.tipo === 'entrada' ? 'text-emerald-400' : 'text-rose-400'}">
+                            ${d.tipo === 'entrada' ? '+' : '-'} R$ ${d.valor.toFixed(2)}
+                        </span>
+                        <button onclick="excluirItem(${d.id})" class="opacity-0 group-hover:opacity-100 text-rose-500 transition-all text-[10px] font-bold">X</button>
+                    </div>
+                </div>
+            `).join('') || '<p class="text-slate-600 text-center py-10 text-sm">Nenhum registro para este mês.</p>';
+        }
+
+        function excluirItem(id) {
+            if(confirm("Excluir este registro?")) {
+                dados = dados.filter(d => d.id !== id);
+                localStorage.setItem('ff_data', JSON.stringify(dados));
+                atualizarTela();
+            }
+        }
+    </script>
+</body>
+</html>
